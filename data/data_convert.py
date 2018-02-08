@@ -2,31 +2,24 @@
 将SQuAD 数据转化为txt格式
 '''
 import json
+import logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+                    datefmt='%a, %d %b %Y %H:%M:%S',
+                    filemode='w')
+_logger=logging.getLogger("data_convert")
+
 class data_convert(object):
 
-    def __init__(self,train_dir,dev_dir,write_train_dir,write_dev_dir):
+    def __init__(self,train_dir,dev_dir):
         self.train_dir=train_dir
         self.dev_dir=dev_dir
-        # self.process(self.dev_dir,write_dev_dir)
-        self.process(self.train_dir,write_train_dir)
 
-
-    def process(self,read_dir,write_dir):
+    def process(self,read_dir,write_dir,num):
         train_file=json.load(open(read_dir,'rb'))
         data=train_file['data'] #
-        # e=data[0]
-        # ee=e['paragraphs'][0]
-        # content=ee['context']
-        # qa_all=ee['qas']
-        # for eee in qa_all:
-        #     # ans_list=self.answer_convert(eee['answers'])
-        #     print(self.answer_convert(eee['answers'],content))
-        #     print(content[int(eee['answers'][0]["answer_start"])])
-        #     print("*"*10)
-        #     question=str(eee['question']).strip()
-        #     content=content.replace('\n',"")
 
-        write_file= open('./train_out_2w.txt','w')
+        write_file= open(write_dir,'w')
         # 解析json数据
         index=0
         dataList=[]
@@ -43,26 +36,15 @@ class data_convert(object):
                     question=str(eee['question']).strip()
 
                     dataList.append([index,question,content,"-".join(ans_list)])
-        #             write_file.write(str(index))
-        #             write_file.write("\t\t")
-        #             write_file.write(question)
-        #             write_file.write("\t\t")
-        #             write_file.write(content)
-        #             write_file.write("\t\t")
-        #             write_file.write("-".join(ans_list))
-        #             write_file.write('\n')
-        # write_file.close()
-        for e in dataList[0:20000]:
-
-            # write_file.write(str(e[0]))
-            # write_file.write('\t\t')
+        for e in dataList[0:num]:
             write_file.write(e[1])
             write_file.write('\t\t')
             write_file.write(e[2])
             write_file.write('\t\t')
             write_file.write(e[3])
             write_file.write('\n')
-            # write_file.write()
+        _logger.info('写入%s完毕'%write_dir)
+
     def answer_convert(self,answers,content):
         '''
         将list[dict]形式答案 转化为 [start_index,end_index]
@@ -84,10 +66,7 @@ class data_convert(object):
             s_list.append(str(start_id)+"-"+str(end_id))
         s_list=list(set(s_list))
         s_list=[[e.split('-')[0],e.split('-')[1]] for e in s_list] #只取一个答案
-        # for e in s_list:
-        #     start_id=len(str(content[:int(e[0])-1]).split(" "))
-        #     end_id=start_id+(int(e[1])-int(e[0]))
-        #     fin_list.append([str(start_id),str(end_id)])
+
         return s_list[0]
 
 
@@ -95,5 +74,16 @@ class data_convert(object):
 
 
 if __name__ == '__main__':
-    dc=data_convert('./train-v1.1.json','./dev-v1.1.json','./train_out_2w.txt','./dev_out.txt')
+    num_list=[20,200,5000,20000]
+
+    train_dir='./train-v1.1.json'
+    dev_dir='./dev-v1.1.json'
+    dev_write_dir='./dev_out.txt'
+    train_write_dir_list=['./train_out_%s.txt'%str(i) for i in num_list]
+
+
+    dc=data_convert('./train-v1.1.json','./dev-v1.1.json')
+    dc.process(dev_dir,dev_write_dir,-1)
+    for num,train_write_dir in zip(num_list,train_write_dir_list):
+        dc.process(train_dir,train_write_dir,num)
 
