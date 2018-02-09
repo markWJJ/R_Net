@@ -10,6 +10,10 @@ R_net问答模型 论文地址：https://www.microsoft.com/en-us/research/wp-con
 验证数据文件：dev_out.txt 有2W数据
 测试数据文件：test_out.txt
 
+首先 下载模型文件：https://pan.baidu.com/s/1c4ey0pE  将模型文件放于 save_model/下
+然后运行 sh data_download.sh
+随后进行训练活在预测
+
 训练：
 >> python R_Net.py --mod=train --sample_num=200 #默认为200的样本集
 模型保存地址为 ./save_model 目前训练好的模型为200样本
