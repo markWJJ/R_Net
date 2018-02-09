@@ -35,9 +35,10 @@ class Config(object):
     keep_dropout=0.7
     summary_write_dir="./tmp/r_net.log"
     epoch=1000
+    lambda1=0.1
 
 config=Config()
-
+tf.app.flags.DEFINE_float("lambda1", config.lambda1, "l2正则化系数")
 tf.app.flags.DEFINE_float("learning_rate", config.learning_rate, "学习率")
 tf.app.flags.DEFINE_float("keep_dropout", config.keep_dropout, "dropout")
 tf.app.flags.DEFINE_integer("batch_size", config.batch_size, "批处理的样本数量")
@@ -104,6 +105,10 @@ class R_Net(object):
         logit1=tf.contrib.layers.batch_norm(logit1)
         with tf.device('/gpu:0'):
             self.loss=tf.losses.softmax_cross_entropy(logits=logit1,onehot_labels=label_one_hot,weights=1.0)
+            #tf.add_to_collection('losses',self.loss)
+            #l2_losses=tf.add_n(tf.get_collection("losses"))
+            #self.loss=l2_losses  #带l2正则化损失函数
+
             tf.summary.scalar("loss",self.loss)
             self.optimizer=tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(self.loss)
         self.merge_summary=tf.summary.merge_all()
@@ -269,6 +274,7 @@ class R_Net(object):
 
         Q_list=tf.unstack(Q_,self.Q_len,1)
         w_Q_1 = tf.Variable(tf.random_normal(shape=(2 * self.hidden_dim, self.hidden_dim)))
+        tf.add_to_collection('losses', tf.contrib.layers.l2_regularizer(FLAGS.lambda1)(w_Q_1))
         r_Q_1=tf.matmul(Q_list[-1],w_Q_1)
         # r_Q_1=Q_list[-1]
         with tf.variable_scope("pre_init_Q"):
