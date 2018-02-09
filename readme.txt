@@ -11,8 +11,8 @@ R_net问答模型 论文地址：https://www.microsoft.com/en-us/research/wp-con
 测试数据文件：test_out.txt
 
 训练：
->> python R_Net.py --mod=train --train_dir=./data/train_out_20.txt  #默认为20的样本集
-模型保存地址为 ./save_model 目前训练好的模型为20样本
+>> python R_Net.py --mod=train --sample_num=200 #默认为200的样本集
+模型保存地址为 ./save_model 目前训练好的模型为200样本
 
 预测：
 >> python R_Net.py --mod=infer --test_dir=./data/test.txt

@@ -23,8 +23,8 @@ class Config(object):
     Q_len=15    # 问句长度
     P_len=100    # 文档长度
     embedding_dim=50    #词向量维度
-    hidden_dim=100
-    sample_num=200
+    hidden_dim=100      #lstm 隐含节点数量
+    sample_num=200      #样本数量
     train_dir='./data/train_out_%s.txt'%sample_num
     dev_dir='./data/dev_out.txt'
     test_dir='./data/test.txt'
