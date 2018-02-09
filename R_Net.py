@@ -12,34 +12,34 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
                     filemode='w')
-_logger=logging.getLogger("seq2seq")
+_logger=logging.getLogger("R_NET")
 
 class Config(object):
     '''
     默认配置
     '''
-    learning_rate=0.001
+    learning_rate=0.05
+
     batch_size=200
     Q_len=15    # 问句长度
     P_len=100    # 文档长度
     embedding_dim=50    #词向量维度
-    hidden_dim=100      #lstm 隐含节点数量
-    sample_num=200      #样本数量
+    hidden_dim=100
+    sample_num=200
     train_dir='./data/train_out_%s.txt'%sample_num
     dev_dir='./data/dev_out.txt'
     test_dir='./data/test.txt'
     model_dir='./save_model/model_%s/r_net_model_%s.ckpt'%(sample_num,sample_num)
-    if not os.path.exists('./save_model/model_%s'%sample_num):
-        os.makedirs('./save_model/model_%s'%sample_num)
+    if not os.path.exists('./save_model/model_%s_'%sample_num):
+        os.makedirs('./save_model/model_%s_'%sample_num)
     use_cpu_num=8
     keep_dropout=0.7
     summary_write_dir="./tmp/r_net.log"
-    epoch=1000
-    lambda1=0.1
-
+    epoch=200
+    lambda1=0.01
 
 config=Config()
-tf.app.flags.DEFINE_float("lambda1", config.lambda1, "l2正则化系数")
+tf.app.flags.DEFINE_float("lambda1", config.lambda1, "l2学习率")
 tf.app.flags.DEFINE_float("learning_rate", config.learning_rate, "学习率")
 tf.app.flags.DEFINE_float("keep_dropout", config.keep_dropout, "dropout")
 tf.app.flags.DEFINE_integer("batch_size", config.batch_size, "批处理的样本数量")
@@ -55,7 +55,7 @@ tf.app.flags.DEFINE_string("train_dir", config.train_dir, "训练数据的路径
 tf.app.flags.DEFINE_string("dev_dir", config.dev_dir, "验证数据文件路径")
 tf.app.flags.DEFINE_string("test_dir", config.test_dir, "测试数据文件路径")
 tf.app.flags.DEFINE_string("model_dir", config.model_dir, "模型保存路径")
-tf.app.flags.DEFINE_string("mod", "train", "默认为训练") # true for prediction
+tf.app.flags.DEFINE_string("mod", "infer", "默认为训练") # true for prediction
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -88,28 +88,31 @@ class R_Net(object):
         with tf.device("/gpu:0"):
             Q_,_ = self.process(input_=self.Q_array,seq_len=self.Q_len,seq_vec=self.Q_seq_vec,scope="Q_encoder")
             P_,_ = self.process(input_=self.P_array,seq_len=self.P_len,seq_vec=self.P_seq_vec,scope="P_encoder")
-            Q_1=tf.contrib.layers.batch_norm(Q_) #批标准化
-            P_1=tf.contrib.layers.batch_norm(P_)
+            Q_1=Q_
+            P_1=P_
+            # Q_1=tf.contrib.layers.batch_norm(Q_) #批标准化
+            # P_1=tf.contrib.layers.batch_norm(P_)
         # gated_attention
             P_2=self.gated_attention(Q_1,P_1) #[None,P_len,hidden_dim]
-            P_2=tf.contrib.layers.batch_norm(P_2)
+            # P_2=tf.contrib.layers.batch_norm(P_2)
+            P_2=P_2
             # self.P_=tf.nn.dropout(self.P_,self.keep_dropout)
             # self_match_attention
             H=self.self_match_attention(P_2)
-            H_1=tf.contrib.layers.batch_norm(H)
+            # H_1=tf.contrib.layers.batch_norm(H)
+            H_1=H
             self.soft_logits,self.ids=self.pointer_network(Q_1,H_1)
 
         label_one_hot = tf.one_hot(self.label, self.P_len, 1, 0, 2)
         # logit=tf.reshape(self.soft_logits,(-1,self.out_num,self.P_len))
         logit=self.soft_logits
         logit1=tf.clip_by_value(logit,1e-5,1.0) #截断函数 防止nan 溢出
-        logit1=tf.contrib.layers.batch_norm(logit1)
+        logit1=logit1
+        # logit1=tf.contrib.layers.batch_norm(logit1)
         with tf.device('/gpu:0'):
             self.loss=tf.losses.softmax_cross_entropy(logits=logit1,onehot_labels=label_one_hot,weights=1.0)
-            #tf.add_to_collection('losses',self.loss)
-            #l2_losses=tf.add_n(tf.get_collection("losses"))
-            #self.loss=l2_losses  #带l2正则化损失函数
-
+            # tf.add_to_collection('losses',self.loss)
+            # self.loss=tf.add_n(tf.get_collection('losses'))
             tf.summary.scalar("loss",self.loss)
             self.optimizer=tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(self.loss)
         self.merge_summary=tf.summary.merge_all()
@@ -148,7 +151,9 @@ class R_Net(object):
         P_P = tf.transpose(P_, [1, 0, 2])
         P_list=tf.unstack(P_P,self.P_len,0)
         #init_c=tf.zeros(shape=(self.batch_size,self.hidden_dim))
-        init_v=tf.zeros(shape=(self.batch_size,self.hidden_dim))
+
+        # init_v=tf.zeros(shape=(self.batch_size,self.hidden_dim))
+        init_v=tf.constant(value=0.0,dtype=tf.float32,shape=(self.batch_size,self.hidden_dim))
         #C=[init_c]
 
         lstm_cell = tf.contrib.rnn.LSTMCell(self.hidden_dim,
@@ -156,7 +161,10 @@ class R_Net(object):
                                        state_is_tuple=True)
         V = [init_v]
         #C = [init_v]
-        init_state=lstm_cell.zero_state(self.batch_size, tf.float32)
+        # init_state=lstm_cell.zero_state(self.batch_size, tf.float32)
+        init_state=(tf.constant(value=0.0,dtype=tf.float32,shape=(self.batch_size,self.hidden_dim)),
+                    tf.constant(value=0.0, dtype=tf.float32, shape=(self.batch_size, self.hidden_dim)))
+
         #print("init_state",init_state)
         state=[init_state]
         with tf.variable_scope("gated_attention"):
@@ -241,7 +249,7 @@ class R_Net(object):
         '''
         P_P = tf.transpose(P_, [1, 0, 2])
         P_list = tf.unstack(P_P, self.P_len, 0)
-        init_h = tf.zeros(shape=(self.batch_size, self.hidden_dim))
+        init_h = tf.constant(value=0.0,dtype=tf.float32,shape=(self.batch_size,self.hidden_dim))
         lstm_cell = tf.contrib.rnn.LSTMCell(self.hidden_dim,
                                             initializer=tf.random_uniform_initializer(-0.1, 0.1, seed=123),
                                             state_is_tuple=True)
@@ -249,6 +257,7 @@ class R_Net(object):
         init_state=(init_h,init_h)
         state=[init_state]
         w_g = tf.Variable(tf.random_normal(shape=(2 * self.hidden_dim, 2 * self.hidden_dim)))
+        tf.add_to_collection('losses',tf.contrib.layers.l2_regularizer(FLAGS.lambda1)(w_g))
         with tf.variable_scope("self_attention"):
             for t in range(self.P_len):
                 if t > 0:
@@ -275,7 +284,7 @@ class R_Net(object):
 
         Q_list=tf.unstack(Q_,self.Q_len,1)
         w_Q_1 = tf.Variable(tf.random_normal(shape=(2 * self.hidden_dim, self.hidden_dim)))
-        tf.add_to_collection('losses', tf.contrib.layers.l2_regularizer(FLAGS.lambda1)(w_Q_1))
+        tf.add_to_collection('losses',tf.contrib.layers.l2_regularizer(FLAGS.lambda1)(w_Q_1))
         r_Q_1=tf.matmul(Q_list[-1],w_Q_1)
         # r_Q_1=Q_list[-1]
         with tf.variable_scope("pre_init_Q"):
@@ -399,7 +408,9 @@ class R_Net(object):
             ini_acc=0.0
             init_loss=99.99
             best_index= 0
+            init_sess=sess
             for i in range(FLAGS.epoch):
+                step=i
                 begin_time=time.time()
                 Q,P,label,Q_len,P_len=dd.next_batch()
                 Q_seq_vec=np.array(Q_len)
@@ -423,8 +434,10 @@ class R_Net(object):
                 if train_loss<init_loss:
                     init_loss=train_loss
                     best_index=i
-                    _logger.info("save %s"%i)
-                    saver.save(sess,FLAGS.model_dir)
+                    init_sess=sess
+                    # _logger.info("save %s"%i)
+                    # saver.save(sess,FLAGS.model_dir,global_step=step,write_meta_graph=False)
+                    # saver.save(sess, FLAGS.model_dir)
 
 
                 # dev_softmax_out, dev_loss = sess.run([self.ids, self.loss],
@@ -436,6 +449,8 @@ class R_Net(object):
                 # _logger.info("dev loss: %s"%dev_loss)
 
                 _logger.info("*"*100)
+
+            saver.save(sess,FLAGS.model_dir)
 
     def infer(self,Q_array,P_array,Q_len,P_len):
         '''
@@ -465,11 +480,7 @@ class R_Net(object):
         new_P=np.array(new_P)
         new_Q_len=np.array(new_Q_len)
         new_P_len=np.array(new_P_len)
-
         print(new_Q.shape)
-        print(new_P.shape)
-        print(new_Q_len.shape)
-        print(new_P_len.shape)
         saver = tf.train.Saver()
         config = tf.ConfigProto(device_count={"CPU": 8},  # limit to num_cpu_core CPU usage
                                 inter_op_parallelism_threads=8,
@@ -478,13 +489,14 @@ class R_Net(object):
                                 log_device_placement=True)
         with tf.Session(config=config) as sess:
             saver.restore(sess,FLAGS.model_dir)
-            ids = sess.run(self.ids,
+            ids,soft = sess.run([self.ids,self.soft_logits],
                  feed_dict={
                      self.Q: new_Q,
                      self.P: new_P,
                      self.Q_seq_vec: new_Q_len,
                      self.P_seq_vec: new_P_len})
-            return ids[:size]
+            soft1=np.argmax(soft,2)
+            return ids[:size],soft1[:size]
 
 def main(_):
 
@@ -500,10 +512,9 @@ def main(_):
             ca.train(dd)
     elif FLAGS.mod=="infer":
         Q, P, label, Q_len, P_len, file_size=dd.get_infer_info(FLAGS.test_dir)
-        ids=ca.infer(Q,P,Q_len,P_len)
-        print(ids)
-        print("*"*100)
-        print(label)
+        ids,soft=ca.infer(Q,P,Q_len,P_len)
+        for e,e1 in zip(ids,label):
+            print(e,e1)
 
 
 if __name__ == '__main__':

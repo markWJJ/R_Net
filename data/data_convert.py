@@ -11,9 +11,10 @@ _logger=logging.getLogger("data_convert")
 
 class data_convert(object):
 
-    def __init__(self,train_dir,dev_dir):
+    def __init__(self,train_dir,dev_dir,P_len):
         self.train_dir=train_dir
         self.dev_dir=dev_dir
+        self.P_len=P_len
 
     def process(self,read_dir,write_dir,num):
         train_file=json.load(open(read_dir,'rb'))
@@ -36,13 +37,16 @@ class data_convert(object):
                     question=str(eee['question']).strip()
 
                     dataList.append([index,question,content,"-".join(ans_list)])
-        for e in dataList[0:num]:
-            write_file.write(e[1])
-            write_file.write('\t\t')
-            write_file.write(e[2])
-            write_file.write('\t\t')
-            write_file.write(e[3])
-            write_file.write('\n')
+        index=0
+        for e in dataList:
+            if int(str(e[3]).split("-")[1])<=self.P_len and index<num:
+                write_file.write(e[1])
+                write_file.write('\t\t')
+                write_file.write(e[2])
+                write_file.write('\t\t')
+                write_file.write(e[3])
+                write_file.write('\n')
+                index+=1
         _logger.info('写入%s完毕'%write_dir)
 
     def answer_convert(self,answers,content):
@@ -82,7 +86,7 @@ if __name__ == '__main__':
     train_write_dir_list=['./train_out_%s.txt'%str(i) for i in num_list]
 
 
-    dc=data_convert('./train-v1.1.json','./dev-v1.1.json')
+    dc=data_convert('./train-v1.1.json','./dev-v1.1.json',P_len=100)
     dc.process(dev_dir,dev_write_dir,-1)
     for num,train_write_dir in zip(num_list,train_write_dir_list):
         dc.process(train_dir,train_write_dir,num)
