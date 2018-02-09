@@ -6,6 +6,7 @@ from data_preprocess import R_Net_Data
 import logging
 import time
 import os
+import sys
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
@@ -18,27 +19,31 @@ class Config(object):
     默认配置
     '''
     learning_rate=0.001
-    batch_size=168
+    batch_size=200
     Q_len=15    # 问句长度
     P_len=100    # 文档长度
     embedding_dim=50    #词向量维度
     hidden_dim=100
-    train_dir='./data/train_out_500.txt'
+    sample_num=200
+    train_dir='./data/train_out_%s.txt'%sample_num
     dev_dir='./data/dev_out.txt'
     test_dir='./data/test.txt'
-    model_dir='./save_model/r_net_model_500.ckpt'
-    # train_num=50
+    model_dir='./save_model/model_%s/r_net_model_%s.ckpt'%(sample_num,sample_num)
+    if not os.path.exists('./save_model/model_%s'%sample_num):
+        os.makedirs('./save_model/model_%s'%sample_num)
     use_cpu_num=8
     keep_dropout=0.7
     summary_write_dir="./tmp/r_net.log"
     epoch=1000
 
 config=Config()
+
 tf.app.flags.DEFINE_float("learning_rate", config.learning_rate, "学习率")
 tf.app.flags.DEFINE_float("keep_dropout", config.keep_dropout, "dropout")
 tf.app.flags.DEFINE_integer("batch_size", config.batch_size, "批处理的样本数量")
 tf.app.flags.DEFINE_integer("Q_len", config.Q_len, "问句长度")
 tf.app.flags.DEFINE_integer("P_len", config.P_len, "文档长度")
+tf.app.flags.DEFINE_integer("sample_num", config.sample_num, "样本个数")
 tf.app.flags.DEFINE_integer("embedding_dim", config.embedding_dim, "词嵌入维度.")
 tf.app.flags.DEFINE_integer("hidden_dim", config.hidden_dim, "中间节点维度.")
 tf.app.flags.DEFINE_integer("use_cpu_num", config.use_cpu_num, "限定使用cpu的个数")
@@ -60,7 +65,6 @@ class R_Net(object):
         self.embedding_dim=embedding_dim
         self.Q_len=Q_len
         self.P_len=P_len
-        self.num_class=5
         self.hidden_dim=hidden_dim
         self.keep_dropout=keep_drouput
         with tf.device("/cpu:0"):
@@ -382,8 +386,8 @@ class R_Net(object):
                 # sess.run(tf.global_variables_initializer())
                 saver.restore(sess,FLAGS.model_dir)
             else:
-                # sess.run(tf.global_variables_initializer())
-                saver.restore(sess,FLAGS.model_dir)
+                sess.run(tf.global_variables_initializer())
+                # saver.restore(sess,FLAGS.model_dir)
 
             ini_acc=0.0
             init_loss=99.99
@@ -425,8 +429,6 @@ class R_Net(object):
                 # _logger.info("dev loss: %s"%dev_loss)
 
                 _logger.info("*"*100)
-
-
 
     def infer(self,Q_array,P_array,Q_len,P_len):
         '''
