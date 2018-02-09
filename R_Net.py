@@ -37,6 +37,7 @@ class Config(object):
     epoch=1000
     lambda1=0.1
 
+
 config=Config()
 tf.app.flags.DEFINE_float("lambda1", config.lambda1, "l2正则化系数")
 tf.app.flags.DEFINE_float("learning_rate", config.learning_rate, "学习率")
